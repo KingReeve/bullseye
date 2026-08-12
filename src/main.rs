@@ -6,6 +6,10 @@ fn bearing(from: Vec2, to: Vec2) -> f32 {
     d.x.atan2(-d.y).to_degrees().rem_euclid(360.0)
 }
 
+fn distance(from: Vec2, to: Vec2) -> f32 {
+    ((from.x - to.x).powi(2) + (from.y - to.y).powi(2)).sqrt()
+}
+
 fn random_position(range: f32) -> Vec2 {
     vec2(gen_range(0.0, range), gen_range(0.0, range))
 }
@@ -14,7 +18,8 @@ struct Game {
     // world sizes
     bullseye: Vec2,
     target: Vec2,
-    radar_range: f32,
+    hint: Hint,
+    display_range: f32,
 
     //screen related for clicking
     bullseye_radius: u16, // in pixels, handling both bullseye seen, and target
@@ -30,7 +35,6 @@ struct Radar {
 struct Hint {
     target_bearing: u16,
     target_distance_nm: f32,
-    miss_distance_nm: f32,
 }
 
 enum State {
@@ -39,23 +43,39 @@ enum State {
 }
 
 enum Feedback {
-    Miss(Hint),
+    Miss { miss_distance: f32 },
     Hit,
 }
 
 //let bearing = bearing(self.bullseye, self.target).round() as u16;
 
 impl Game {
-    fn handle_guess(&mut self, _radar: &Radar) {
-        self.state = State::Feedback(Feedback::Hit);
+    fn handle_guess(&mut self, radar: &Radar) {
+        let mouse = mouse_position();
+        let click = radar.screen_to_world(vec2(mouse.0, mouse.1));
+
+        let miss_distance = click.distance(self.target);
+        let hit_radius = radar.pixels_to_nm(self.bullseye_radius as f32);
+
+        if miss_distance <= hit_radius {
+            self.state = State::Feedback(Feedback::Hit);
+        } else {
+            self.state = State::Feedback(Feedback::Miss {
+                miss_distance: miss_distance,
+            });
+        }
     }
 
     fn new() -> Self {
         let mut game = Self {
             bullseye: Vec2::ZERO,
             target: Vec2::ZERO,
+            hint: Hint {
+                target_bearing: 0,
+                target_distance_nm: 0.0,
+            },
             bullseye_radius: 10,
-            radar_range: 60.0,
+            display_range: 60.0,
             state: State::Playing,
         };
         game.shuffle();
@@ -70,7 +90,7 @@ impl Game {
         match &self.state {
             State::Playing => self.handle_guess(radar),
 
-            State::Feedback(Feedback::Miss(_)) => {
+            State::Feedback(Feedback::Miss { .. }) => {
                 self.state = State::Playing;
             }
 
@@ -99,8 +119,13 @@ impl Game {
     }
 
     fn shuffle(&mut self) {
-        self.bullseye = random_position(self.radar_range);
-        self.target = random_position(self.radar_range);
+        self.bullseye = random_position(self.display_range);
+        self.target = random_position(self.display_range);
+
+        self.hint = Hint {
+            target_bearing: bearing(self.bullseye, self.target).round() as u16,
+            target_distance_nm: distance(self.bullseye, self.target),
+        };
         self.state = State::Playing;
     }
 }
@@ -148,7 +173,7 @@ async fn main() {
     let mut game = Game::new();
 
     loop {
-        let radar = Radar::new(game.radar_range);
+        let radar = Radar::new(game.display_range);
 
         game.update(&radar);
 
