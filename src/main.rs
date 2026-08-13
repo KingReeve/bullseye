@@ -79,7 +79,16 @@ impl DisplayRange {
             DisplayRange::Nm30 => DisplayRange::Nm60,
             DisplayRange::Nm60 => DisplayRange::Nm120,
             DisplayRange::Nm120 => DisplayRange::Nm240,
-            DisplayRange::Nm240 => DisplayRange::Nm30,
+            DisplayRange::Nm240 => DisplayRange::Nm240,
+        }
+    }
+
+    fn previous(&self) -> Self {
+        match self {
+            DisplayRange::Nm30 => DisplayRange::Nm30,
+            DisplayRange::Nm60 => DisplayRange::Nm30,
+            DisplayRange::Nm120 => DisplayRange::Nm60,
+            DisplayRange::Nm240 => DisplayRange::Nm120,
         }
     }
 }
@@ -92,7 +101,7 @@ impl Game {
         self.attempts += 1;
 
         let miss_distance = click.distance(self.target);
-        let hit_radius = radar.pixels_to_nm((self.bullseye_radius * 3) as f32);
+        let hit_radius = radar.pixels_to_nm((self.bullseye_radius * 4) as f32);
 
         if miss_distance <= hit_radius {
             self.state = State::Feedback(Feedback::Hit);
@@ -121,6 +130,23 @@ impl Game {
     }
 
     fn update(&mut self, radar: &Radar) {
+        if is_mouse_button_pressed(MouseButton::Left) {
+            let mouse = mouse_position();
+            let mouse = vec2(mouse.0, mouse.1);
+
+            if self.range_up_button_rect().contains(mouse) {
+                self.display_range = self.display_range.next();
+                self.shuffle();
+                return;
+            }
+
+            if self.range_down_button_rect().contains(mouse) {
+                self.display_range = self.display_range.previous();
+                self.shuffle();
+                return;
+            }
+        }
+
         if !is_mouse_button_pressed(MouseButton::Left) {
             return;
         }
@@ -173,6 +199,8 @@ impl Game {
                 RED,
             );
         }
+
+        self.draw_range_buttons();
     }
 
     fn draw(&self, radar: &Radar) {
@@ -225,6 +253,58 @@ impl Game {
         };
         self.attempts = 0;
         self.state = State::Playing;
+    }
+
+    fn range_up_button_rect(&self) -> Rect {
+        Rect::new(20.0, 110.0, 100.0, 40.0)
+    }
+
+    fn range_down_button_rect(&self) -> Rect {
+        Rect::new(125.0, 110.0, 100.0, 40.0)
+    }
+
+    fn draw_range_buttons(&self) {
+        let up = self.range_up_button_rect();
+        let down = self.range_down_button_rect();
+
+        draw_rectangle(up.x, up.y, up.w, up.h, DARKGRAY);
+        draw_rectangle(down.x, down.y, down.w, down.h, DARKGRAY);
+
+        let up_center = up.center();
+        let down_center = down.center();
+
+        let mut text = "+";
+        let mut dimension = measure_text(text, None, 30, 1.0);
+        draw_text(
+            "+",
+            up_center.x - dimension.width / 2.0,
+            up_center.y + dimension.height / 2.0,
+            30.0,
+            WHITE,
+        );
+
+        text = "-";
+        dimension = measure_text(text, None, 30, 1.0);
+        draw_text(
+            "-",
+            down_center.x - dimension.width / 2.0,
+            down_center.y + dimension.height / 2.0,
+            30.0,
+            WHITE,
+        );
+
+        let center_x = (up_center.x + down_center.x) / 2.0;
+
+        text = "Range";
+        dimension = measure_text(text, None, 20, 1.0);
+
+        draw_text(
+            text,
+            center_x - dimension.width / 2.0,
+            up.y - 10.0,
+            20.0,
+            WHITE,
+        );
     }
 }
 
