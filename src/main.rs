@@ -18,13 +18,14 @@ struct Game {
     // world sizes
     bullseye: Vec2,
     target: Vec2,
-    hint: Hint,
-    display_range: f32,
+    call: Call,
+    display_range: DisplayRange,
 
     //screen related for clicking
     bullseye_radius: u16, // in pixels, handling both bullseye seen, and target
 
     state: State,
+    attempts: u8,
 }
 
 struct Radar {
@@ -32,7 +33,7 @@ struct Radar {
     range: f32,
 }
 
-struct Hint {
+struct Call {
     target_bearing: u16,
     target_distance_nm: f32,
 }
@@ -47,15 +48,51 @@ enum Feedback {
     Hit,
 }
 
-//let bearing = bearing(self.bullseye, self.target).round() as u16;
+enum DisplayRange {
+    Nm30,
+    Nm60,
+    Nm120,
+    Nm240,
+}
+
+impl DisplayRange {
+    fn nm(&self) -> f32 {
+        match self {
+            Self::Nm30 => 30.0,
+            Self::Nm60 => 60.0,
+            Self::Nm120 => 120.0,
+            Self::Nm240 => 240.0,
+        }
+    }
+
+    fn label(&self) -> &'static str {
+        match self {
+            DisplayRange::Nm30 => "30 NM",
+            DisplayRange::Nm60 => "60 NM",
+            DisplayRange::Nm120 => "120 NM",
+            DisplayRange::Nm240 => "240 NM",
+        }
+    }
+
+    fn next(&self) -> Self {
+        match self {
+            DisplayRange::Nm30 => DisplayRange::Nm60,
+            DisplayRange::Nm60 => DisplayRange::Nm120,
+            DisplayRange::Nm120 => DisplayRange::Nm240,
+            DisplayRange::Nm240 => DisplayRange::Nm30,
+        }
+    }
+}
 
 impl Game {
     fn handle_guess(&mut self, radar: &Radar) {
         let mouse = mouse_position();
         let click = radar.screen_to_world(vec2(mouse.0, mouse.1));
 
+        self.attempts += 1;
+
         let miss_distance = click.distance(self.target);
-        let hit_radius = radar.pixels_to_nm(self.bullseye_radius as f32);
+        let hit_radius = radar.pixels_to_nm((self.bullseye_radius * 3) as f32);
 
         if miss_distance <= hit_radius {
             self.state = State::Feedback(Feedback::Hit);
@@ -70,13 +107,14 @@ impl Game {
         let mut game = Self {
             bullseye: Vec2::ZERO,
             target: Vec2::ZERO,
-            hint: Hint {
+            call: Call {
                 target_bearing: 0,
                 target_distance_nm: 0.0,
             },
             bullseye_radius: 10,
-            display_range: 60.0,
+            display_range: DisplayRange::Nm60,
             state: State::Playing,
+            attempts: 0,
         };
         game.shuffle();
         game
@@ -90,19 +128,55 @@ impl Game {
         match &self.state {
             State::Playing => self.handle_guess(radar),
 
-            State::Feedback(Feedback::Miss { .. }) => {
+            State::Feedback(Feedback::Miss { .. }) if self.attempts < 3 => {
                 self.state = State::Playing;
+            }
+
+            State::Feedback(Feedback::Miss { .. }) => {
+                self.shuffle();
             }
 
             State::Feedback(Feedback::Hit) => {
                 self.shuffle();
-                self.state = State::Playing;
             }
         }
     }
 
+    fn draw_ui(&self) {
+        draw_text(
+            &format!("HSD Scope: {} nm", self.display_range.label()),
+            20.0,
+            30.0,
+            24.0,
+            WHITE,
+        );
+
+        //bullseye call
+        draw_text(
+            &format!(
+                "Bullseye {:03} {:.1}",
+                self.call.target_bearing, self.call.target_distance_nm
+            ),
+            20.0,
+            60.0,
+            24.0,
+            WHITE,
+        );
+
+        //Feedback
+        if let State::Feedback(Feedback::Miss { miss_distance }) = &self.state {
+            draw_text(
+                &format!("Miss by {:.1} nm", miss_distance),
+                20.0,
+                90.0,
+                24.0,
+                RED,
+            );
+        }
+    }
+
     fn draw(&self, radar: &Radar) {
-        // Radar outline
+        // HSD
         draw_rectangle_lines(
             radar.rect.x,
             radar.rect.y,
@@ -116,16 +190,40 @@ impl Game {
         let p = radar.world_to_screen(self.bullseye);
 
         draw_circle(p.x, p.y, self.bullseye_radius as f32, BLUE);
+
+        // draw target if needed
+        match &self.state {
+            State::Playing => {}
+
+            State::Feedback(Feedback::Hit) => {
+                self.draw_target(radar);
+            }
+
+            State::Feedback(Feedback::Miss { .. }) if self.attempts >= 3 => {
+                self.draw_target(radar);
+            }
+
+            State::Feedback(Feedback::Miss { .. }) => {}
+        }
+
+        self.draw_ui();
+    }
+
+    fn draw_target(&self, radar: &Radar) {
+        let p = radar.world_to_screen(self.target);
+
+        draw_circle(p.x, p.y, self.bullseye_radius as f32, RED);
     }
 
     fn shuffle(&mut self) {
-        self.bullseye = random_position(self.display_range);
-        self.target = random_position(self.display_range);
+        self.bullseye = random_position(self.display_range.nm());
+        self.target = random_position(self.display_range.nm());
 
-        self.hint = Hint {
+        self.call = Call {
             target_bearing: bearing(self.bullseye, self.target).round() as u16,
             target_distance_nm: distance(self.bullseye, self.target),
         };
+        self.attempts = 0;
         self.state = State::Playing;
     }
 }
@@ -173,7 +271,7 @@ async fn main() {
     let mut game = Game::new();
 
     loop {
-        let radar = Radar::new(game.display_range);
+        let radar = Radar::new(game.display_range.nm());
 
         game.update(&radar);
 
