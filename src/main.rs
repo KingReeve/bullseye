@@ -337,9 +337,10 @@ impl Radar {
         )
     }
 
-    fn nm_to_pixels(&self, nm: f32) -> f32 {
-        nm * self.rect.w / self.range
-    }
+    // TODO decide if this will be useful anywhere else
+    // fn nm_to_pixels(&self, nm: f32) -> f32 {
+    //     nm * self.rect.w / self.range
+    // }
 
     fn pixels_to_nm(&self, pixels: f32) -> f32 {
         pixels * self.range / self.rect.w
