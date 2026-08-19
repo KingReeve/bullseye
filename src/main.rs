@@ -11,7 +11,20 @@ fn distance(from: Vec2, to: Vec2) -> f32 {
 }
 
 fn random_position(range: f32) -> Vec2 {
-    vec2(gen_range(0.0, range), gen_range(0.0, range))
+    // I'm switching to polar, the easiest way I can think of to keep the target
+    // and the bullseye inside the square after any arbitrary amount of rotation
+    // is just keeping it inside the inscribed circle
+
+    let center = range / 2.0;
+    let radius = range / 2.0;
+
+    let angle = gen_range(0.0, std::f32::consts::TAU);
+    let distance = gen_range(0.0, 1.0_f32).sqrt() * radius;
+
+    vec2(
+        center + angle.sin() * distance,
+        center - angle.cos() * distance,
+    )
 }
 
 fn rotate(v: Vec2, angle: f32) -> Vec2 {
