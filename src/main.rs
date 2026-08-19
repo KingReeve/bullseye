@@ -14,12 +14,19 @@ fn random_position(range: f32) -> Vec2 {
     vec2(gen_range(0.0, range), gen_range(0.0, range))
 }
 
+fn rotate(v: Vec2, angle: f32) -> Vec2 {
+    let (sin, cos) = angle.sin_cos();
+    vec2(v.x * cos - v.y * sin, v.x * sin + v.y * cos)
+}
+
 struct Game {
     // world sizes
     bullseye: Vec2,
     target: Vec2,
     call: Call,
     display_range: DisplayRange,
+
+    heading: f32,
 
     //screen related for clicking
     bullseye_radius: u16, // in pixels, handling both bullseye seen, and target
@@ -31,6 +38,7 @@ struct Game {
 struct Radar {
     rect: Rect,
     range: f32,
+    heading: f32,
 }
 
 struct Call {
@@ -120,8 +128,9 @@ impl Game {
                 target_bearing: 0,
                 target_distance_nm: 0.0,
             },
-            bullseye_radius: 10,
             display_range: DisplayRange::Nm60,
+            heading: gen_range(0.0, 360.0),
+            bullseye_radius: 10,
             state: State::Playing,
             attempts: 0,
         };
@@ -131,16 +140,18 @@ impl Game {
 
     fn update(&mut self, radar: &Radar) {
         if is_mouse_button_pressed(MouseButton::Left) {
-            let mouse = mouse_position();
-            let mouse = vec2(mouse.0, mouse.1);
+            //TODO handle mouse into vec_mouse without dangling memory
 
-            if self.range_up_button_rect().contains(mouse) {
+            let mouse = mouse_position();
+            let vec_mouse = vec2(mouse.0, mouse.1);
+
+            if self.range_up_button_rect().contains(vec_mouse) {
                 self.display_range = self.display_range.next();
                 self.shuffle();
                 return;
             }
 
-            if self.range_down_button_rect().contains(mouse) {
+            if self.range_down_button_rect().contains(vec_mouse) {
                 self.display_range = self.display_range.previous();
                 self.shuffle();
                 return;
@@ -177,6 +188,14 @@ impl Game {
             WHITE,
         );
 
+        draw_text(
+            &format!("Heading {:03.0}", self.heading),
+            20.0,
+            60.0,
+            24.0,
+            YELLOW,
+        );
+
         //bullseye call
         draw_text(
             &format!(
@@ -184,7 +203,7 @@ impl Game {
                 self.call.target_bearing, self.call.target_distance_nm
             ),
             20.0,
-            60.0,
+            90.0,
             24.0,
             WHITE,
         );
@@ -194,7 +213,7 @@ impl Game {
             draw_text(
                 &format!("Miss by {:.1} nm", miss_distance),
                 20.0,
-                90.0,
+                120.0,
                 24.0,
                 RED,
             );
@@ -246,9 +265,12 @@ impl Game {
     fn shuffle(&mut self) {
         self.bullseye = random_position(self.display_range.nm());
         self.target = random_position(self.display_range.nm());
+        self.heading = gen_range(0.0, 360.0);
 
         self.call = Call {
-            target_bearing: bearing(self.bullseye, self.target).round() as u16,
+            target_bearing: bearing(self.bullseye, self.target)
+                .rem_euclid(360.0)
+                .round() as u16,
             target_distance_nm: distance(self.bullseye, self.target),
         };
         self.attempts = 0;
@@ -256,11 +278,11 @@ impl Game {
     }
 
     fn range_up_button_rect(&self) -> Rect {
-        Rect::new(20.0, 110.0, 100.0, 40.0)
+        Rect::new(20.0, 140.0, 100.0, 40.0)
     }
 
     fn range_down_button_rect(&self) -> Rect {
-        Rect::new(125.0, 110.0, 100.0, 40.0)
+        Rect::new(125.0, 140.0, 100.0, 40.0)
     }
 
     fn draw_range_buttons(&self) {
@@ -275,6 +297,7 @@ impl Game {
 
         let mut text = "+";
         let mut dimension = measure_text(text, None, 30, 1.0);
+
         draw_text(
             "+",
             up_center.x - dimension.width / 2.0,
@@ -285,6 +308,7 @@ impl Game {
 
         text = "-";
         dimension = measure_text(text, None, 30, 1.0);
+
         draw_text(
             "-",
             down_center.x - dimension.width / 2.0,
@@ -309,7 +333,7 @@ impl Game {
 }
 
 impl Radar {
-    fn new(range_nm: f32) -> Self {
+    fn new(range_nm: f32, heading: f32) -> Self {
         let size = (screen_width() - 200.0).min(screen_height());
 
         Self {
@@ -320,21 +344,31 @@ impl Radar {
                 size,
             ),
             range: range_nm,
+            heading: heading,
         }
     }
 
     fn world_to_screen(&self, pos: Vec2) -> Vec2 {
+        let center = vec2(self.range / 2.0, self.range / 2.0);
+
+        let relative = pos - center;
+
+        let rotated = rotate(relative, -self.heading.to_radians());
+
         vec2(
-            self.rect.x + pos.x / self.range * self.rect.w,
-            self.rect.y + pos.y / self.range * self.rect.h,
+            self.rect.center().x + rotated.x / self.range * self.rect.w,
+            self.rect.center().y + rotated.y / self.range * self.rect.h,
         )
     }
 
     fn screen_to_world(&self, pos: Vec2) -> Vec2 {
-        vec2(
-            (pos.x - self.rect.x) / self.rect.w * self.range,
-            (pos.y - self.rect.y) / self.rect.h * self.range,
-        )
+        let relative = vec2(
+            (pos.x - self.rect.center().x) / self.rect.w * self.range,
+            (pos.y - self.rect.center().y) / self.rect.h * self.range,
+        );
+        let unrotated = rotate(relative, self.heading.to_radians());
+        let center = vec2(self.range / 2.0, self.range / 2.0);
+        center + unrotated
     }
 
     // TODO decide if this will be useful anywhere else
@@ -352,7 +386,7 @@ async fn main() {
     let mut game = Game::new();
 
     loop {
-        let radar = Radar::new(game.display_range.nm());
+        let radar = Radar::new(game.display_range.nm(), game.heading);
 
         game.update(&radar);
 
