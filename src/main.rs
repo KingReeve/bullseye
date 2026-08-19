@@ -291,11 +291,11 @@ impl Game {
     }
 
     fn range_up_button_rect(&self) -> Rect {
-        Rect::new(20.0, 140.0, 100.0, 40.0)
+        Rect::new(20.0, 150.0, 100.0, 40.0)
     }
 
     fn range_down_button_rect(&self) -> Rect {
-        Rect::new(125.0, 140.0, 100.0, 40.0)
+        Rect::new(125.0, 150.0, 100.0, 40.0)
     }
 
     fn draw_range_buttons(&self) {
