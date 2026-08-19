@@ -109,7 +109,7 @@ impl Game {
         self.attempts += 1;
 
         let miss_distance = click.distance(self.target);
-        let hit_radius = radar.pixels_to_nm((self.bullseye_radius * 4) as f32);
+        let hit_radius = radar.pixels_to_nm((self.bullseye_radius * 6) as f32);
 
         if miss_distance <= hit_radius {
             self.state = State::Feedback(Feedback::Hit);
