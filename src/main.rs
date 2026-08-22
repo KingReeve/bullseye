@@ -1,3 +1,4 @@
+use macroquad::audio::{Sound, load_sound, play_sound_once};
 use macroquad::prelude::*;
 use macroquad::rand::gen_range;
 
@@ -46,6 +47,9 @@ struct Game {
 
     state: State,
     attempts: u8,
+
+    hit_sound: Sound,
+    miss_sound: Sound,
 }
 
 struct Radar {
@@ -125,15 +129,25 @@ impl Game {
         let hit_radius = radar.pixels_to_nm((self.bullseye_radius * 6) as f32);
 
         if miss_distance <= hit_radius {
+            play_sound_once(&self.hit_sound);
             self.state = State::Feedback(Feedback::Hit);
         } else {
+            play_sound_once(&self.miss_sound);
             self.state = State::Feedback(Feedback::Miss {
                 miss_distance: miss_distance,
             });
         }
     }
 
-    fn new() -> Self {
+    async fn new() -> Self {
+        let hit_sound = load_sound("assets/hit.ogg")
+            .await
+            .expect("Failed to load hit sound");
+
+        let miss_sound = load_sound("assets/miss.ogg")
+            .await
+            .expect("Failed to load miss sound");
+
         let mut game = Self {
             bullseye: Vec2::ZERO,
             target: Vec2::ZERO,
@@ -146,6 +160,9 @@ impl Game {
             bullseye_radius: 10,
             state: State::Playing,
             attempts: 0,
+
+            hit_sound,
+            miss_sound,
         };
         game.shuffle();
         game
@@ -396,7 +413,7 @@ impl Radar {
 
 #[macroquad::main("Bullseye")]
 async fn main() {
-    let mut game = Game::new();
+    let mut game = Game::new().await;
 
     loop {
         let radar = Radar::new(game.display_range.nm(), game.heading);
