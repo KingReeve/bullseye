@@ -1,1 +1,1 @@
-In progress. Making a tool to practice bullseye calls.
+A tool to practice bullseye calls for combat flight sims.
