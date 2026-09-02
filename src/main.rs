@@ -2,11 +2,6 @@ use macroquad::audio::{Sound, load_sound, play_sound_once};
 use macroquad::prelude::*;
 use macroquad::rand::{gen_range, srand};
 
-fn bearing(from: Vec2, to: Vec2) -> f32 {
-    let d = to - from;
-    d.x.atan2(-d.y).to_degrees().rem_euclid(360.0)
-}
-
 fn distance(from: Vec2, to: Vec2) -> f32 {
     ((from.x - to.x).powi(2) + (from.y - to.y).powi(2)).sqrt()
 }
@@ -211,7 +206,7 @@ impl Game {
 
     fn draw_ui(&self) {
         draw_text(
-            &format!("HSD Scope: {} nm", self.display_range.label()),
+            &format!("HSD Scope: {}", self.display_range.label()),
             20.0,
             30.0,
             24.0,
@@ -297,10 +292,10 @@ impl Game {
         self.target = random_position(self.display_range.nm());
         self.heading = gen_range(0.0, 360.0);
 
+        let d = self.target - self.bullseye;
+
         self.call = Call {
-            target_bearing: bearing(self.bullseye, self.target)
-                .rem_euclid(360.0)
-                .round() as u16,
+            target_bearing: d.x.atan2(-d.y).to_degrees().rem_euclid(360.0).round() as u16,
             target_distance_nm: distance(self.bullseye, self.target),
         };
         self.attempts = 0;
