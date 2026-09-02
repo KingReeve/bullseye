@@ -1,6 +1,6 @@
 use macroquad::audio::{Sound, load_sound, play_sound_once};
 use macroquad::prelude::*;
-use macroquad::rand::gen_range;
+use macroquad::rand::{gen_range, srand};
 
 fn bearing(from: Vec2, to: Vec2) -> f32 {
     let d = to - from;
@@ -413,6 +413,8 @@ impl Radar {
 
 #[macroquad::main("Bullseye")]
 async fn main() {
+    srand(miniquad::date::now().to_bits());
+
     let mut game = Game::new().await;
 
     loop {
