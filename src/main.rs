@@ -6,6 +6,11 @@ fn distance(from: Vec2, to: Vec2) -> f32 {
     ((from.x - to.x).powi(2) + (from.y - to.y).powi(2)).sqrt()
 }
 
+fn bearing(from: Vec2, to: Vec2) -> u16 {
+    let d = to - from;
+    d.x.atan2(-d.y).to_degrees().rem_euclid(360.0).round() as u16
+}
+
 fn random_position(range: f32) -> Vec2 {
     // I'm switching to polar, the easiest way I can think of to keep the target
     // and the bullseye inside the square after any arbitrary amount of rotation
@@ -292,10 +297,8 @@ impl Game {
         self.target = random_position(self.display_range.nm());
         self.heading = gen_range(0.0, 360.0);
 
-        let d = self.target - self.bullseye;
-
         self.call = Call {
-            target_bearing: d.x.atan2(-d.y).to_degrees().rem_euclid(360.0).round() as u16,
+            target_bearing: bearing(self.bullseye, self.target),
             target_distance_nm: distance(self.bullseye, self.target),
         };
         self.attempts = 0;
